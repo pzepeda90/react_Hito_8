@@ -1,31 +1,63 @@
 // UserContext.jsx
 import { createContext, useState, useEffect } from 'react';
 
-const UserContext = createContext();
+export const UserContext = createContext();
 
-function UserProvider({ children }) {
-    const [user, setUser] = useState(() => {
-        const storedUser = localStorage.getItem('user');
-        if (storedUser) {
-            try {
-                return JSON.parse(storedUser);
-            } catch {
-                localStorage.removeItem('user');
-                return null;
+export const UserProvider = ({ children }) => {
+    const [user, setUser] = useState(null);
+    const [isAuthenticated, setIsAuthenticated] = useState(false);
+
+    const getToken = () => {
+        try {
+            const storedUser = localStorage.getItem('user');
+            if (storedUser) {
+                const userData = JSON.parse(storedUser);
+                return userData.token;
             }
+            return null;
+        } catch (error) {
+            console.error('Error al obtener token:', error);
+            return null;
         }
-        return null;
-    });
+    };
 
-    const [isAuthenticated, setIsAuthenticated] = useState(() => Boolean(localStorage.getItem('user')));
+    const getProfile = async () => {
+        const token = getToken();
+        if (!token) return null;
+
+        try {
+            const response = await fetch('http://localhost:3000/api/auth/me', {
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            if (!response.ok) {
+                throw new Error('Error al obtener el perfil');
+            }
+
+            const data = await response.json();
+            return data;
+        } catch (error) {
+            console.error('Error al obtener perfil:', error);
+            return null;
+        }
+    };
 
     useEffect(() => {
-        console.log('Estado de autenticación actualizado:', {
-            user,
-            isAuthenticated,
-            localStorageUser: localStorage.getItem('user')
-        });
-    }, [user, isAuthenticated]);
+        const initializeAuth = async () => {
+            const token = getToken();
+            if (token) {
+                const profileData = await getProfile();
+                if (profileData) {
+                    setUser(profileData);
+                    setIsAuthenticated(true);
+                }
+            }
+        };
+
+        initializeAuth();
+    }, []);
 
     const login = async (email, password) => {
         try {
@@ -116,26 +148,14 @@ function UserProvider({ children }) {
         });
     };
 
-    const getToken = () => {
-        try {
-            const storedUser = localStorage.getItem('user');
-            if (storedUser) {
-                const userData = JSON.parse(storedUser);
-                return userData.token;
-            }
-        } catch (error) {
-            console.error('Error obteniendo token:', error);
-        }
-        return null;
-    };
-
     const value = {
         user,
         isAuthenticated,
         login,
         logout,
+        register,
         getToken,
-        register
+        getProfile
     };
 
     return (
@@ -143,6 +163,4 @@ function UserProvider({ children }) {
             {children}
         </UserContext.Provider>
     );
-}
-
-export { UserContext, UserProvider };
+};
